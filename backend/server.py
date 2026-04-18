@@ -20,6 +20,15 @@ import json
 import aiohttp
 import asyncio
 import urllib.parse
+from bs4 import BeautifulSoup
+from PyPDF2 import PdfReader
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from fastapi.responses import Response
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -42,6 +51,11 @@ PROVIDER_WEIGHTS = {
 
 class TextAnalysisRequest(BaseModel):
     text: str
+    check_sources: bool = True
+    extract_claims: bool = True
+
+class UrlAnalysisRequest(BaseModel):
+    url: str
     check_sources: bool = True
     extract_claims: bool = True
 
@@ -746,6 +760,307 @@ async def get_stats():
         "prediction_distribution": [{"label": s["_id"], "count": s["count"]} for s in prediction_stats],
         "content_type_distribution": [{"label": s["_id"], "count": s["count"]} for s in type_stats]
     }
+
+
+@api_router.post("/analyze-url", response_model=AnalysisResult)
+async def analyze_url(request: UrlAnalysisRequest):
+    """Fetch and analyze content from a URL"""
+    try:
+        # Fetch the URL content
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            async with session.get(request.url, headers=headers, timeout=20) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=400, detail=f"Failed to fetch URL: HTTP {resp.status}")
+                html = await resp.text()
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Remove script, style, nav, footer
+        for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+            tag.decompose()
+        
+        # Get title
+        title = soup.find('title')
+        title_text = title.get_text().strip() if title else ''
+        
+        # Try to find main article content
+        article = soup.find('article') or soup.find('main') or soup.find('body')
+        
+        if article:
+            # Get all paragraphs from article
+            paragraphs = article.find_all('p')
+            content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 30])
+        else:
+            content = soup.get_text(separator='\n\n', strip=True)
+        
+        # Limit to reasonable size
+        full_text = f"{title_text}\n\n{content}"[:8000]
+        
+        if len(full_text.strip()) < 50:
+            raise HTTPException(status_code=400, detail="Could not extract meaningful content from URL")
+        
+        # Run analysis using same logic as text analysis
+        text_request = TextAnalysisRequest(
+            text=full_text,
+            check_sources=request.check_sources,
+            extract_claims=request.extract_claims
+        )
+        
+        result = await analyze_text(text_request)
+        # Update content to show it was from URL
+        result.content = f"URL: {request.url}\nTitle: {title_text[:200]}"
+        
+        # Update in database
+        await db.analyses.update_one(
+            {"id": result.id},
+            {"$set": {"content": result.content}}
+        )
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except aiohttp.ClientError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+    except Exception as e:
+        logging.error(f"Error in URL analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/analyze-pdf", response_model=AnalysisResult)
+async def analyze_pdf(file: UploadFile = File(...)):
+    """Analyze a PDF document for misinformation"""
+    try:
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="File must be a PDF")
+        
+        contents = await file.read()
+        
+        # Extract text from PDF
+        pdf_reader = PdfReader(io.BytesIO(contents))
+        
+        text_chunks = []
+        for page in pdf_reader.pages[:20]:  # Limit to 20 pages
+            try:
+                page_text = page.extract_text()
+                if page_text:
+                    text_chunks.append(page_text)
+            except Exception:
+                continue
+        
+        full_text = '\n\n'.join(text_chunks)[:10000]  # Max 10k chars
+        
+        if len(full_text.strip()) < 50:
+            raise HTTPException(status_code=400, detail="Could not extract text from PDF (may be scanned/image-based)")
+        
+        # Run text analysis
+        text_request = TextAnalysisRequest(
+            text=full_text,
+            check_sources=True,
+            extract_claims=True
+        )
+        
+        result = await analyze_text(text_request)
+        # Update content to show PDF info
+        result.content = f"PDF: {file.filename}\nPages analyzed: {len(text_chunks)}"
+        
+        await db.analyses.update_one(
+            {"id": result.id},
+            {"$set": {"content": result.content, "content_type": "pdf"}}
+        )
+        result.content_type = "pdf"
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error in PDF analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/export-pdf/{analysis_id}")
+async def export_pdf(analysis_id: str):
+    """Export analysis report as PDF"""
+    try:
+        result = await db.analyses.find_one({"id": analysis_id}, {"_id": 0})
+        if not result:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+        
+        # Create PDF in memory
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#0A0A0A'),
+            spaceAfter=6,
+            alignment=TA_LEFT
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#6B7280'),
+            spaceAfter=20
+        )
+        
+        heading_style = ParagraphStyle(
+            'Heading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#002FA7'),
+            spaceAfter=8,
+            spaceBefore=16
+        )
+        
+        body_style = ParagraphStyle(
+            'Body',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#111827'),
+            spaceAfter=8,
+            leading=14
+        )
+        
+        story = []
+        
+        # Header
+        story.append(Paragraph("TruthLens AI", title_style))
+        story.append(Paragraph("Multimodal Misinformation Analysis Report", subtitle_style))
+        
+        # Metadata
+        timestamp = result.get('timestamp', '')
+        if isinstance(timestamp, str):
+            ts_display = timestamp[:19].replace('T', ' ')
+        else:
+            ts_display = str(timestamp)[:19]
+        
+        metadata_data = [
+            ['Report ID:', result['id'][:16] + '...'],
+            ['Content Type:', result['content_type'].upper()],
+            ['Generated:', ts_display],
+            ['Credibility Score:', f"{result['credibility_score']:.1f}%"],
+            ['Prediction:', result['prediction']]
+        ]
+        
+        # Color for prediction
+        pred = result['prediction'].lower()
+        if 'reliable' in pred or 'authentic' in pred:
+            pred_color = colors.HexColor('#00C853')
+        elif 'suspicious' in pred:
+            pred_color = colors.HexColor('#FFC107')
+        else:
+            pred_color = colors.HexColor('#FF2A2A')
+        
+        metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
+        metadata_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('TEXTCOLOR', (1, -1), (1, -1), pred_color),
+            ('FONTNAME', (1, -1), (1, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB'))
+        ]))
+        story.append(metadata_table)
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Content Preview
+        story.append(Paragraph("Content Analyzed", heading_style))
+        content_preview = result['content'][:500].replace('\n', '<br/>')
+        story.append(Paragraph(content_preview, body_style))
+        
+        # Weighted Ensemble Details
+        if result.get('weighted_score') is not None:
+            story.append(Paragraph("Weighted Ensemble Analysis", heading_style))
+            ensemble_data = [
+                ['Weighted Score:', f"{result['weighted_score']:.2f}%"],
+                ['Model Agreement:', f"{result.get('agreement_score', 0):.2f}%"],
+            ]
+            if result.get('confidence_interval'):
+                ci = result['confidence_interval']
+                ensemble_data.append(['Confidence Interval:', f"{ci.get('lower', 0):.1f}% - {ci.get('upper', 0):.1f}%"])
+            
+            ensemble_table = Table(ensemble_data, colWidths=[2*inch, 4*inch])
+            ensemble_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F9FAFB'))
+            ]))
+            story.append(ensemble_table)
+        
+        # Explanation
+        story.append(Paragraph("AI Explanation", heading_style))
+        explanation = result.get('explanation', 'No explanation available.')[:2000]
+        story.append(Paragraph(explanation.replace('\n', '<br/>'), body_style))
+        
+        # Extracted Claims
+        claims = result.get('extracted_claims', [])
+        if claims:
+            story.append(Paragraph("Extracted Claims & Verification", heading_style))
+            for i, claim in enumerate(claims[:5], 1):
+                claim_text = f"<b>{i}. {claim.get('claim', 'N/A')}</b>"
+                story.append(Paragraph(claim_text, body_style))
+                
+                ver = claim.get('verification', {})
+                status = "✓ Verified via Wikipedia" if ver and ver.get('wikipedia_found') else "⚠ Unverified"
+                meta = f"Type: {claim.get('type', 'N/A')} | Importance: {claim.get('importance', 'N/A')} | {status}"
+                story.append(Paragraph(f"<i>{meta}</i>", body_style))
+                
+                if ver and ver.get('sources'):
+                    for src in ver.get('sources', [])[:2]:
+                        story.append(Paragraph(f"→ {src.get('title', '')}: {src.get('url', '')}", body_style))
+                story.append(Spacer(1, 0.1*inch))
+        
+        # Suspicious Elements
+        segments = result.get('highlighted_segments', [])
+        if segments:
+            story.append(Paragraph("Suspicious Elements Detected", heading_style))
+            for seg in segments[:10]:
+                story.append(Paragraph(f"• <b>{seg.get('text', '')}</b>", body_style))
+                story.append(Paragraph(f"  {seg.get('reason', '')}", body_style))
+        
+        # Footer
+        story.append(Spacer(1, 0.3*inch))
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontSize=8,
+            textColor=colors.HexColor('#9CA3AF'),
+            alignment=TA_CENTER
+        )
+        story.append(Paragraph(
+            "Generated by TruthLens AI · Powered by OpenAI, Claude, and Gemini AI Ensemble",
+            footer_style
+        ))
+        
+        doc.build(story)
+        buffer.seek(0)
+        
+        return Response(
+            content=buffer.getvalue(),
+            media_type='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="truthlens-report-{analysis_id[:8]}.pdf"'
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error exporting PDF: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.get("/")

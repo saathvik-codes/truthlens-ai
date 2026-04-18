@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileText, Image as ImageIcon, Video, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Video, Link2, FileType, Loader2, AlertCircle, Download } from 'lucide-react';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -15,6 +15,7 @@ const API = `${BACKEND_URL}/api`;
 const Analysis = () => {
   const [activeTab, setActiveTab] = useState('text');
   const [textInput, setTextInput] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
@@ -32,13 +33,45 @@ const Analysis = () => {
     try {
       const response = await axios.post(`${API}/analyze-text`, {
         text: textInput,
-        check_sources: true
+        check_sources: true,
+        extract_claims: true
       });
 
       setResult(response.data);
       toast.success('Analysis complete!');
     } catch (error) {
-      console.error('Text analysis error:', error);
+      toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleUrlAnalysis = async () => {
+    if (!urlInput.trim()) {
+      toast.error('Please enter a URL');
+      return;
+    }
+
+    try {
+      new URL(urlInput);
+    } catch {
+      toast.error('Invalid URL format');
+      return;
+    }
+
+    setAnalyzing(true);
+    setResult(null);
+
+    try {
+      const response = await axios.post(`${API}/analyze-url`, {
+        url: urlInput,
+        check_sources: true,
+        extract_claims: true
+      }, { timeout: 120000 });
+
+      setResult(response.data);
+      toast.success('URL analysis complete!');
+    } catch (error) {
       toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setAnalyzing(false);
@@ -58,25 +91,54 @@ const Analysis = () => {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const endpoint = type === 'image' ? '/analyze-image' : '/analyze-video';
+      let endpoint = '/analyze-image';
+      if (type === 'video') endpoint = '/analyze-video';
+      if (type === 'pdf') endpoint = '/analyze-pdf';
+
       const response = await axios.post(`${API}${endpoint}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 180000
       });
 
       setResult(response.data);
       toast.success('Analysis complete!');
     } catch (error) {
-      console.error('File analysis error:', error);
       toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setAnalyzing(false);
     }
   };
 
+  const handleExportPdf = async () => {
+    if (!result?.id) {
+      toast.error('No analysis to export');
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API}/export-pdf/${result.id}`, {
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `truthlens-report-${result.id.substring(0, 8)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('PDF exported successfully!');
+    } catch (error) {
+      toast.error('Export failed: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-
     const file = e.dataTransfer.files[0];
     if (file) {
       setSelectedFile(file);
@@ -102,7 +164,7 @@ const Analysis = () => {
           className="mb-8"
         >
           <h1 className="text-4xl font-bold cabinet-grotesk mb-2">Content Analysis</h1>
-          <p className="text-base text-gray-600">Upload or paste content for multimodal misinformation detection</p>
+          <p className="text-base text-gray-600">Analyze text, URLs, images, videos, or PDF documents for misinformation</p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -114,18 +176,26 @@ const Analysis = () => {
             className="bg-white border border-gray-200 rounded-lg p-6"
           >
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsList className="grid w-full grid-cols-5 mb-6">
                 <TabsTrigger value="text" data-testid="tab-text">
-                  <FileText className="w-4 h-4 mr-2" />
+                  <FileText className="w-4 h-4 mr-1" />
                   Text
                 </TabsTrigger>
+                <TabsTrigger value="url" data-testid="tab-url">
+                  <Link2 className="w-4 h-4 mr-1" />
+                  URL
+                </TabsTrigger>
                 <TabsTrigger value="image" data-testid="tab-image">
-                  <ImageIcon className="w-4 h-4 mr-2" />
+                  <ImageIcon className="w-4 h-4 mr-1" />
                   Image
                 </TabsTrigger>
                 <TabsTrigger value="video" data-testid="tab-video">
-                  <Video className="w-4 h-4 mr-2" />
+                  <Video className="w-4 h-4 mr-1" />
                   Video
+                </TabsTrigger>
+                <TabsTrigger value="pdf" data-testid="tab-pdf">
+                  <FileType className="w-4 h-4 mr-1" />
+                  PDF
                 </TabsTrigger>
               </TabsList>
 
@@ -147,14 +217,40 @@ const Analysis = () => {
                     className="w-full bg-black hover:bg-gray-800 text-white py-6"
                     data-testid="analyze-text-btn"
                   >
-                    {analyzing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      'Analyze Text'
-                    )}
+                    {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : 'Analyze Text'}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="url" data-testid="url-input-section">
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                    Article URL
+                  </label>
+                  <div className="relative">
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="https://example.com/article"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900"
+                      data-testid="url-input"
+                    />
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <p className="text-xs text-blue-900">
+                      <strong>Tip:</strong> Paste any article, blog post, or news URL. We'll extract the content
+                      and analyze it for misinformation, claims, and source credibility.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleUrlAnalysis}
+                    disabled={analyzing || !urlInput.trim()}
+                    className="w-full bg-black hover:bg-gray-800 text-white py-6"
+                    data-testid="analyze-url-btn"
+                  >
+                    {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : 'Analyze URL'}
                   </Button>
                 </div>
               </TabsContent>
@@ -166,10 +262,7 @@ const Analysis = () => {
                   </label>
                   <div
                     onDrop={handleDrop}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOver(true);
-                    }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
                     className={`upload-zone ${dragOver ? 'drag-over' : ''} p-12 text-center`}
                     data-testid="image-upload-zone"
@@ -202,14 +295,7 @@ const Analysis = () => {
                     className="w-full bg-black hover:bg-gray-800 text-white py-6"
                     data-testid="analyze-image-btn"
                   >
-                    {analyzing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      'Analyze Image'
-                    )}
+                    {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : 'Analyze Image'}
                   </Button>
                 </div>
               </TabsContent>
@@ -221,10 +307,7 @@ const Analysis = () => {
                   </label>
                   <div
                     onDrop={handleDrop}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOver(true);
-                    }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
                     className={`upload-zone ${dragOver ? 'drag-over' : ''} p-12 text-center`}
                     data-testid="video-upload-zone"
@@ -257,14 +340,58 @@ const Analysis = () => {
                     className="w-full bg-black hover:bg-gray-800 text-white py-6"
                     data-testid="analyze-video-btn"
                   >
-                    {analyzing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      'Analyze Video'
-                    )}
+                    {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : 'Analyze Video'}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="pdf" data-testid="pdf-upload-section">
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                    Upload PDF Document
+                  </label>
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    className={`upload-zone ${dragOver ? 'drag-over' : ''} p-12 text-center`}
+                    data-testid="pdf-upload-zone"
+                  >
+                    <FileType className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-base font-medium mb-2">Drag and drop PDF here</p>
+                    <p className="text-sm text-gray-500 mb-4">or click to browse (max 20 pages)</p>
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="pdf-upload"
+                      data-testid="pdf-file-input"
+                    />
+                    <label htmlFor="pdf-upload">
+                      <Button variant="outline" className="cursor-pointer" asChild>
+                        <span>Select PDF</span>
+                      </Button>
+                    </label>
+                  </div>
+                  {selectedFile && (
+                    <div className="p-3 bg-gray-50 rounded-md">
+                      <p className="text-sm text-gray-700">Selected: {selectedFile.name}</p>
+                    </div>
+                  )}
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <p className="text-xs text-blue-900">
+                      <strong>Perfect for:</strong> Research papers, journalism reports, academic publications,
+                      and whitepapers. We'll analyze claims and verify sources.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleFileAnalysis('pdf')}
+                    disabled={analyzing || !selectedFile}
+                    className="w-full bg-black hover:bg-gray-800 text-white py-6"
+                    data-testid="analyze-pdf-btn"
+                  >
+                    {analyzing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : 'Analyze PDF'}
                   </Button>
                 </div>
               </TabsContent>
@@ -296,6 +423,18 @@ const Analysis = () => {
 
             {result && (
               <div className="space-y-6" data-testid="analysis-results">
+                {/* Export PDF Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleExportPdf}
+                    variant="outline"
+                    className="gap-2"
+                    data-testid="export-pdf-btn"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export Report (PDF)
+                  </Button>
+                </div>
                 <CredibilityScore score={result.credibility_score} prediction={result.prediction} />
                 <ExplainabilityView result={result} />
                 {result.knowledge_graph && <KnowledgeGraph data={result.knowledge_graph} />}
