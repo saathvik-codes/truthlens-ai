@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>TruthLens AI</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    }
+
+    body {
+      width: 380px;
+      background: #FFFFFF;
+      color: #111827;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #0A0A0A 0%, #002FA7 100%);
+      color: white;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #002FA7;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header p {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .selected-text-preview {
+      background: #F9FAFB;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      color: #4B5563;
+      margin-bottom: 16px;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #0A0A0A;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #1F2937;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #F3F4F6;
+      color: #111827;
+      margin-top: 8px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #6B7280;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #E5E7EB;
+      border-top-color: #002FA7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result {
+      margin-top: 16px;
+    }
+
+    .score-card {
+      background: #F9FAFB;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .score {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .prediction {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .prediction.reliable {
+      background: #D1FAE5;
+      color: #065F46;
+    }
+
+    .prediction.suspicious {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .prediction.fake {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .explanation {
+      font-size: 12px;
+      color: #4B5563;
+      line-height: 1.6;
+      padding: 12px;
+      background: #F9FAFB;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: #9CA3AF;
+      font-size: 13px;
+    }
+
+    .footer {
+      border-top: 1px solid #E5E7EB;
+      padding: 12px 20px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #9CA3AF;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">TL</div>
+    <div>
+      <h1>TruthLens AI</h1>
+      <p>Misinformation Detector</p>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="no-selection" class="empty-state">
+      <p>Select text on any webpage, then click the button below to analyze.</p>
+    </div>
+
+    <div id="selection-ready" style="display: none;">
+      <div class="selected-text-preview" id="selected-preview"></div>
+      <button class="btn btn-primary" id="analyze-btn">Analyze Selection</button>
+    </div>
+
+    <div id="loading" class="loading" style="display: none;">
+      <div class="spinner"></div>
+      <p>Analyzing with AI ensemble...</p>
+    </div>
+
+    <div id="result" class="result" style="display: none;">
+      <div class="score-card">
+        <div class="score" id="score-value">—</div>
+        <span class="prediction" id="prediction-badge">—</span>
+      </div>
+      <div class="explanation" id="explanation-text"></div>
+      <button class="btn btn-secondary" id="new-analysis-btn">New Analysis</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    Powered by OpenAI · Claude · Gemini
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
