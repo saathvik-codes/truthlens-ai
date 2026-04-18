@@ -1,0 +1,107 @@
+{
+  "project_name": "TruthLens AI",
+  "domain": "Research-grade AI platform / Misinformation Intelligence",
+  "theme": "LIGHT",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "emotional_tone": "Objective, Authoritative, Clear, Functional",
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F9FAFB",
+      "tertiary": "#F3F4F6"
+    },
+    "text": {
+      "primary": "#111827",
+      "secondary": "#4B5563",
+      "muted": "#9CA3AF"
+    },
+    "brand": {
+      "primary": "#0A0A0A",
+      "secondary": "#002FA7"
+    },
+    "status": {
+      "danger": "#FF2A2A",
+      "warning": "#FFC107",
+      "success": "#00C853"
+    },
+    "borders": {
+      "default": "#E5E7EB",
+      "focus": "#002FA7"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Cabinet Grotesk",
+      "body": "IBM Plex Sans",
+      "mono": "IBM Plex Mono"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm",
+      "overline": "text-xs font-semibold uppercase tracking-[0.2em] text-gray-500"
+    }
+  },
+  "spacing_and_layout": {
+    "system": "Dense 'Control Room' Grid",
+    "gaps": "gap-4 md:gap-6",
+    "padding": "Generous internal padding for containers: p-6 or p-8",
+    "radius": "Subtle roundness: rounded-md (6px) or rounded-lg (8px)",
+    "surfaces": "Cardless or flat cards with 1px border (#E5E7EB) and no shadow by default. On hover, slight lift and shadow-sm.",
+    "navigation": "Collapsible left-sidebar navigation for complex SaaS tool scalability. Fixed position.",
+    "dashboard_grid": "Base grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Summary widgets: col-span-1. Primary data/charts: col-span-2 or 3. Feed/lists: col-span-1 row-span-2."
+  },
+  "components": {
+    "buttons": "Flat, solid colors. Primary CTA in Jet Black (#0A0A0A) or Klein Blue (#002FA7). Hover state requires a visible color shift (e.g., hover:bg-gray-800).",
+    "inputs": "Shadcn components, customized to use 1px border-gray-300, flat white background, rounded-md.",
+    "data_visualization": "Use Recharts for basic charts (Donut charts for Credibility Scores, limited to 3 variables). Use progressive disclosure (overview first, details on demand).",
+    "knowledge_graph": "Use react-force-graph-2d or custom SVG logic for node visualization to map sources.",
+    "explainable_ai": "For text: highlighted spans with tooltip explanations. For images/video: overlaid heatmaps.",
+    "upload_zone": "Interactive drag-drop zone: dashed border (border-gray-300), light gray background (bg-gray-50), clear typography.",
+    "glassmorphism": "Used ONLY for sticky elements or overlays (e.g., backdrop-blur-md bg-white/80) with 1px bottom border."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Crisp transitions. hover:bg-gray-100 for secondary elements. Buttons translate-y-[1px] on active.",
+    "entrance": "Staggered fade-up for dashboard widgets using Framer Motion (e.g., y: 10, opacity: 0 to 1 over 0.3s).",
+    "data_loading": "Skeleton loaders using animate-pulse instead of generic spinners for main content areas."
+  },
+  "media_assets": {
+    "images": {
+      "heatmap_analysis_sample": {
+        "url": "https://static.prod-images.emergentagent.com/jobs/c0628e40-772e-4eb0-a145-90aa6434c695/images/29450b42cdc02220275f38e82566f7785d0fdf9766a0d0bd4a1cbc972f501191.png",
+        "description": "Deepfake analysis heatmap overlay on a human face photograph, showing anomalies. High tech research UI aesthetic."
+      },
+      "video_deepfake_sample": {
+        "url": "https://images.unsplash.com/photo-1771340589112-c9b88a1b7b0c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxwb2xpdGljaWFuJTIwc3BlZWNofGVufDB8fHx8MTc3NjUwMzQwN3ww&ixlib=rb-4.1.0&q=85",
+        "description": "A man in a suit speaks into a microphone. Use as placeholder for video analysis input."
+      },
+      "text_misinfo_sample": {
+        "url": "https://images.unsplash.com/photo-1738190228336-aa4cf73874b7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwyfHxuZXdzcGFwZXIlMjBoZWFkbGluZXxlbnwwfHx8fDE3NzY1MDM0MDd8MA&ixlib=rb-4.1.0&q=85",
+        "description": "A newspaper headline. Use as placeholder for text analysis."
+      },
+      "partner_logo_slack": {
+        "url": "https://images.unsplash.com/photo-1496200186974-4293800e2c20?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxjb21wYW55JTIwbG9nb3xlbnwwfHx8fDE3NzY1MDM0MDd8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Slack logo for partner/integration sections."
+      },
+      "partner_logo_jaguar": {
+        "url": "https://images.unsplash.com/photo-1562783912-21ad31ee2a83?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwyfHxjb21wYW55JTIwbG9nb3xlbnwwfHx8fDE3NzY1MDM0MDd8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Jaguar logo for partner/integration sections."
+      }
+    }
+  },
+  "testing": {
+    "attributes": "All interactive elements must include a 'data-testid' attribute (e.g., data-testid='upload-media-button')."
+  },
+  "instructions_to_main_agent": [
+    "Use pure HTML + Tailwind for complex layout structures and override standard Shadcn component styles to match the 'Swiss High-Contrast' aesthetic.",
+    "Build a Left Sidebar layout. The main content area should be a dense dashboard.",
+    "Implement real-time credibility scoring UI with prominent visual indicators (Red/Yellow/Green).",
+    "Integrate the generated heatmap image into an 'Analysis Results' section to demonstrate the explainable AI capability.",
+    "Use 'react-force-graph-2d' or custom layout for a network graph showing source propagation.",
+    "Do NOT use 'Inter', 'Roboto', or 'Open Sans'. Load 'Cabinet Grotesk' for headings and 'IBM Plex Sans' for body text via Google Fonts or custom font faces.",
+    "Ensure high accessibility, using dark gray/black text on off-white surfaces for perfect contrast.",
+    "Never use generic placeholder text; use contextual, realistic text for a misinformation analysis tool."
+  ]
+}
