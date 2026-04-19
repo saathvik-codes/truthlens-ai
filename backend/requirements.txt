@@ -20,7 +20,7 @@ distro==1.9.0
 dnspython==2.8.0
 ecdsa==0.19.2
 email-validator==2.3.0
-git+https://github.com/saathvik-codes/emergentintegrations.git@main#egg=emergentintegrations
+git+https://github.com/emergent-ai/emergentintegrations.git@main#egg=emergentintegrations
 fastapi==0.110.1
 fastuuid==0.14.0
 feedfinder2==0.0.4
