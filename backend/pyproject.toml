@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emergentintegrations"
+version = "0.0.1"
+description = "Local emergentintegrations stub package for TruthLens AI"
+authors = [
+  { name = "truthlens-ai", email = "github@emergent.sh" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "aiohttp>=3.13.5"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["emergentintegrations*"]
