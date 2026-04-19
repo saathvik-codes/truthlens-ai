@@ -15,7 +15,9 @@ import io
 from PIL import Image
 import cv2
 import numpy as np
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from openai import AsyncOpenAI
+from anthropic import Anthropic
+import google.generativeai as genai
 import json
 import aiohttp
 import asyncio
@@ -37,10 +39,14 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
+# Initialize API clients
+openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY', ''))
+claude_client = Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY', ''))
+genai.configure(api_key=os.environ.get('GOOGLE_API_KEY', ''))
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+# FastAPI App
+app = FastAPI(title="Truthlens API")
+api_router = APIRouter(prefix="/api")
 
 # Weighted ensemble configuration
 PROVIDER_WEIGHTS = {
@@ -138,33 +144,30 @@ async def verify_with_wikipedia(query: str) -> Dict[str, Any]:
 async def extract_claims_from_text(text: str) -> List[Dict[str, Any]]:
     """Extract factual claims from text using AI"""
     try:
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"claim-extract-{uuid.uuid4()}",
-            system_message=(
-                "You are a claim extraction specialist. Extract factual, verifiable claims from text. "
-                "Return ONLY a valid JSON array (no markdown, no code blocks) with this structure: "
-                '[{"claim": "string", "type": "factual|opinion|statistical", "importance": "high|medium|low"}]. '
-                "Extract maximum 5 most important claims. Focus on verifiable factual statements."
-            )
-        ).with_model("openai", "gpt-5.2")
+        response = await openai_client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a claim extraction specialist. Extract factual, verifiable claims from text. Return ONLY a valid JSON array with this structure: [{\"claim\": \"string\", \"type\": \"factual|opinion|statistical\", \"importance\": \"high|medium|low\"}]. Extract maximum 5 claims."
+                },
+                {
+                    "role": "user",
+                    "content": f"Extract key factual claims from this text:\n\n{text}"
+                }
+            ],
+            temperature=0.3
+        )
         
-        response = await chat.send_message(UserMessage(
-            text=f"Extract key factual claims from this text:\n\n{text}"
-        ))
+        response_text = response.choices[0].message.content.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.split("```")[1]
+            if response_text.startswith("json"):
+                response_text = response_text[4:]
+        response_text = response_text.strip()
         
-        # Clean response
-        response_clean = response.strip()
-        if response_clean.startswith("```"):
-            response_clean = response_clean.split("```")[1]
-            if response_clean.startswith("json"):
-                response_clean = response_clean[4:]
-        response_clean = response_clean.strip()
-        
-        claims = json.loads(response_clean)
-        if isinstance(claims, list):
-            return claims[:5]
-        return []
+        claims = json.loads(response_text)
+        return claims[:5] if isinstance(claims, list) else []
     except Exception as e:
         logging.error(f"Claim extraction error: {e}")
         return []
@@ -266,41 +269,58 @@ async def analyze_text_with_ai(text: str) -> Dict[str, Any]:
     
     async def run_openai():
         try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"openai-{uuid.uuid4()}",
-                system_message=(
-                    "You are an expert misinformation detection system. Analyze text for credibility, "
-                    "misleading claims, and suspicious patterns. Return ONLY valid JSON (no markdown): "
-                    '{"credibility_score": 0-100 number, "is_fake": boolean, "suspicious_phrases": [strings], '
-                    '"reasoning": "detailed explanation", "manipulation_tactics": [strings]}'
-                )
-            ).with_model("openai", "gpt-5.2")
-            
-            response = await chat.send_message(UserMessage(text=f"Analyze:\n\n{text}"))
-            clean = response.strip().replace("```json", "").replace("```", "").strip()
+            response = await openai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert misinformation detection system. Analyze text for credibility. Return ONLY valid JSON: {\"credibility_score\": 0-100 number, \"is_fake\": boolean, \"suspicious_phrases\": [strings], \"reasoning\": \"string\", \"manipulation_tactics\": [strings]}"
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Analyze:\n\n{text}"
+                    }
+                ],
+                temperature=0.3
+            )
+            clean = response.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
             return json.loads(clean)
         except Exception as e:
             return {"error": str(e)}
     
-    async def run_claude():
+    def run_claude():
         try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"claude-{uuid.uuid4()}",
-                system_message=(
-                    "You are a fact-checking AI. Analyze text for truthfulness and bias. "
-                    "Return ONLY valid JSON (no markdown): "
-                    '{"credibility_score": 0-100 number, "is_reliable": boolean, '
-                    '"manipulation_tactics": [strings], "detailed_analysis": "string", "confidence_level": 0-100 number}'
-                )
-            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-            
-            response = await chat.send_message(UserMessage(text=f"Analyze credibility:\n\n{text}"))
-            clean = response.strip().replace("```json", "").replace("```", "").strip()
+            response = claude_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=500,
+                system="You are a fact-checking AI. Analyze text for truthfulness and bias. Return ONLY valid JSON: {\"credibility_score\": 0-100 number, \"is_reliable\": boolean, \"manipulation_tactics\": [strings], \"detailed_analysis\": \"string\", \"confidence_level\": 0-100 number}",
+                messages=[
+                    {"role": "user", "content": f"Analyze credibility:\n\n{text}"}
+                ]
+            )
+            clean = response.content[0].text.strip().replace("```json", "").replace("```", "").strip()
             return json.loads(clean)
         except Exception as e:
             return {"error": str(e)}
+    
+    def run_gemini():
+        try:
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            response = model.generate_content(f"You are an AI fact-checker. Analyze text for misinformation. Return ONLY valid JSON: {{\"truth_score\": 0-100 number, \"verdict\": \"Reliable|Suspicious|Fake\", \"key_issues\": [strings], \"explanation\": \"detailed reasoning\"}}\n\nEvaluate:\n\n{text}")
+            clean = response.text.strip().replace("```json", "").replace("```", "").strip()
+            return json.loads(clean)
+        except Exception as e:
+            return {"error": str(e)}
+    
+    openai_result = await run_openai()
+    claude_result = run_claude()
+    gemini_result = run_gemini()
+    
+    results['openai'] = openai_result
+    results['claude'] = claude_result
+    results['gemini'] = gemini_result
+    
+    return results
     
     async def run_gemini():
         try:
@@ -338,48 +358,44 @@ async def analyze_image_with_ai(image_base64: str) -> Dict[str, Any]:
     
     async def run_openai():
         try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"openai-vision-{uuid.uuid4()}",
-                system_message=(
-                    "You are an image forensics AI. Analyze for manipulation/deepfakes. "
-                    "Return ONLY valid JSON: "
-                    '{"authenticity_score": 0-100 number, "is_manipulated": boolean, '
-                    '"manipulation_areas": [strings], "detection_confidence": 0-100 number, "detailed_analysis": "string"}'
-                )
-            ).with_model("openai", "gpt-5.2")
-            
-            response = await chat.send_message(UserMessage(
-                text="Analyze this image for manipulation.",
-                file_contents=[ImageContent(image_base64=image_base64)]
-            ))
-            clean = response.strip().replace("```json", "").replace("```", "").strip()
+            response = await openai_client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an image forensics AI. Analyze for manipulation/deepfakes. Return ONLY valid JSON: {\"authenticity_score\": 0-100 number, \"is_manipulated\": boolean, \"manipulation_areas\": [strings], \"detection_confidence\": 0-100 number, \"detailed_analysis\": \"string\"}"
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Analyze this image for manipulation."},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                        ]
+                    }
+                ],
+                temperature=0.3
+            )
+            clean = response.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
             return json.loads(clean)
         except Exception as e:
             return {"error": str(e)}
     
-    async def run_gemini():
+    def run_gemini():
         try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"gemini-vision-{uuid.uuid4()}",
-                system_message=(
-                    "You are an image authenticity detector. Return ONLY valid JSON: "
-                    '{"authenticity_score": 0-100 number, "verdict": "Authentic|Edited|Fake", '
-                    '"anomalies": [strings], "confidence": 0-100 number, "reasoning": "string"}'
-                )
-            ).with_model("gemini", "gemini-3-flash-preview")
-            
-            response = await chat.send_message(UserMessage(
-                text="Examine this image for manipulation.",
-                file_contents=[ImageContent(image_base64=image_base64)]
-            ))
-            clean = response.strip().replace("```json", "").replace("```", "").strip()
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            import base64
+            image_data = base64.b64decode(image_base64)
+            response = model.generate_content([
+                "You are an image authenticity detector. Return ONLY valid JSON: {\"authenticity_score\": 0-100 number, \"verdict\": \"Authentic|Edited|Fake\", \"anomalies\": [strings], \"confidence\": 0-100 number, \"reasoning\": \"string\"}",
+                {"mime_type": "image/jpeg", "data": image_data}
+            ])
+            clean = response.text.strip().replace("```json", "").replace("```", "").strip()
             return json.loads(clean)
         except Exception as e:
             return {"error": str(e)}
     
-    openai_result, gemini_result = await asyncio.gather(run_openai(), run_gemini())
+    openai_result = await run_openai()
+    gemini_result = run_gemini()
     results['openai'] = openai_result
     results['gemini'] = gemini_result
     
