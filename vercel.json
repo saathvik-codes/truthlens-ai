@@ -4,6 +4,6 @@
   "installCommand": "cd frontend && npm install",
   "framework": "create-react-app",
   "env": {
-    "REACT_APP_API_URL": "@api_url"
+    "REACT_APP_BACKEND_URL": "https://truthlens-ai-4q4e.onrender.com"
   }
 }
