@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import certifi
 import os
 import logging
 from pathlib import Path
@@ -45,7 +46,18 @@ if not db_name:
         'DB_NAME environment variable is required. Set it in Render service environment variables.'
     )
 
-client = AsyncIOMotorClient(mongo_url)
+mongo_server_selection_timeout_ms = int(
+    os.environ.get('MONGO_SERVER_SELECTION_TIMEOUT_MS', '5000')
+)
+mongo_socket_timeout_ms = int(os.environ.get('MONGO_SOCKET_TIMEOUT_MS', '10000'))
+
+client = AsyncIOMotorClient(
+    mongo_url,
+    tlsCAFile=os.environ.get('MONGO_TLS_CA_FILE') or certifi.where(),
+    serverSelectionTimeoutMS=mongo_server_selection_timeout_ms,
+    connectTimeoutMS=mongo_server_selection_timeout_ms,
+    socketTimeoutMS=mongo_socket_timeout_ms,
+)
 db = client[db_name]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
@@ -129,6 +141,58 @@ class ClaimRecord(BaseModel):
     confidence: float
     analysis_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+async def persist_analysis_result(
+    analysis_obj: AnalysisResult,
+    claims: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    """Best-effort persistence so analysis can still succeed if Mongo is degraded."""
+    doc = analysis_obj.model_dump()
+    doc['timestamp'] = doc['timestamp'].isoformat()
+
+    try:
+        await db.analyses.insert_one(doc)
+
+        for claim in claims or []:
+            claim_record = {
+                "id": str(uuid.uuid4()),
+                "claim_text": claim.get('claim', ''),
+                "verdict": "Verified" if claim.get('verification', {}).get('wikipedia_found') else "Unverified",
+                "confidence": analysis_obj.credibility_score,
+                "analysis_id": analysis_obj.id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            await db.claims.insert_one(claim_record)
+
+        return True
+    except Exception as exc:
+        logging.warning(
+            "Database persistence skipped for analysis %s: %s",
+            analysis_obj.id,
+            exc,
+            exc_info=True
+        )
+        return False
+
+
+async def safe_update_analysis(analysis_id: str, updates: Dict[str, Any]) -> bool:
+    try:
+        await db.analyses.update_one({"id": analysis_id}, {"$set": updates})
+        return True
+    except Exception as exc:
+        logging.warning(
+            "Database update skipped for analysis %s: %s",
+            analysis_id,
+            exc,
+            exc_info=True
+        )
+        return False
+
+
+def add_persistence_warning(explanation: str) -> str:
+    note = " Note: analysis completed, but saving to history is temporarily unavailable."
+    return f"{explanation[:1400]}{note}"
 
 
 # ========== WIKIPEDIA SOURCE VERIFICATION ==========
@@ -579,22 +643,9 @@ async def analyze_text(request: TextAnalysisRequest):
             agreement_score=ensemble['agreement_score']
         )
         
-        # Save to database
-        doc = analysis_obj.model_dump()
-        doc['timestamp'] = doc['timestamp'].isoformat()
-        await db.analyses.insert_one(doc)
-        
-        # Save claims to separate collection for historical tracking
-        for claim in verified_claims:
-            claim_record = {
-                "id": str(uuid.uuid4()),
-                "claim_text": claim.get('claim', ''),
-                "verdict": "Verified" if claim.get('verification', {}).get('wikipedia_found') else "Unverified",
-                "confidence": credibility_score,
-                "analysis_id": analysis_obj.id,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-            await db.claims.insert_one(claim_record)
+        persisted = await persist_analysis_result(analysis_obj, verified_claims)
+        if not persisted:
+            analysis_obj.explanation = add_persistence_warning(analysis_obj.explanation)
         
         return analysis_obj
     
@@ -659,9 +710,9 @@ async def analyze_image(file: UploadFile = File(...)):
             agreement_score=ensemble['agreement_score']
         )
         
-        doc = analysis_obj.model_dump()
-        doc['timestamp'] = doc['timestamp'].isoformat()
-        await db.analyses.insert_one(doc)
+        persisted = await persist_analysis_result(analysis_obj)
+        if not persisted:
+            analysis_obj.explanation = add_persistence_warning(analysis_obj.explanation)
         
         return analysis_obj
     
@@ -742,9 +793,9 @@ async def analyze_video(file: UploadFile = File(...)):
             }
         )
         
-        doc = analysis_obj.model_dump()
-        doc['timestamp'] = doc['timestamp'].isoformat()
-        await db.analyses.insert_one(doc)
+        persisted = await persist_analysis_result(analysis_obj)
+        if not persisted:
+            analysis_obj.explanation = add_persistence_warning(analysis_obj.explanation)
         
         return analysis_obj
     
@@ -755,7 +806,12 @@ async def analyze_video(file: UploadFile = File(...)):
 
 @api_router.get("/analysis/{analysis_id}", response_model=AnalysisResult)
 async def get_analysis(analysis_id: str):
-    result = await db.analyses.find_one({"id": analysis_id}, {"_id": 0})
+    try:
+        result = await db.analyses.find_one({"id": analysis_id}, {"_id": 0})
+    except Exception as exc:
+        logging.warning("Failed to fetch analysis %s: %s", analysis_id, exc, exc_info=True)
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
+
     if not result:
         raise HTTPException(status_code=404, detail="Analysis not found")
     
@@ -767,7 +823,11 @@ async def get_analysis(analysis_id: str):
 
 @api_router.get("/history", response_model=List[AnalysisHistory])
 async def get_history(limit: int = 20):
-    results = await db.analyses.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    try:
+        results = await db.analyses.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    except Exception as exc:
+        logging.warning("Failed to load analysis history: %s", exc, exc_info=True)
+        return []
     
     history = []
     for result in results:
@@ -788,34 +848,45 @@ async def get_history(limit: int = 20):
 @api_router.get("/claims/recent")
 async def get_recent_claims(limit: int = 20):
     """Get recently tracked claims"""
-    results = await db.claims.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
-    return results
+    try:
+        results = await db.claims.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+        return results
+    except Exception as exc:
+        logging.warning("Failed to load recent claims: %s", exc, exc_info=True)
+        return []
 
 
 @api_router.get("/stats")
 async def get_stats():
     """Get platform statistics"""
-    total_analyses = await db.analyses.count_documents({})
-    total_claims = await db.claims.count_documents({})
-    
-    # Aggregate by prediction type
-    pipeline = [
-        {"$group": {"_id": "$prediction", "count": {"$sum": 1}}}
-    ]
-    prediction_stats = await db.analyses.aggregate(pipeline).to_list(100)
-    
-    # Aggregate by content type
-    type_pipeline = [
-        {"$group": {"_id": "$content_type", "count": {"$sum": 1}}}
-    ]
-    type_stats = await db.analyses.aggregate(type_pipeline).to_list(100)
-    
-    return {
-        "total_analyses": total_analyses,
-        "total_claims_tracked": total_claims,
-        "prediction_distribution": [{"label": s["_id"], "count": s["count"]} for s in prediction_stats],
-        "content_type_distribution": [{"label": s["_id"], "count": s["count"]} for s in type_stats]
-    }
+    try:
+        total_analyses = await db.analyses.count_documents({})
+        total_claims = await db.claims.count_documents({})
+        
+        pipeline = [
+            {"$group": {"_id": "$prediction", "count": {"$sum": 1}}}
+        ]
+        prediction_stats = await db.analyses.aggregate(pipeline).to_list(100)
+        
+        type_pipeline = [
+            {"$group": {"_id": "$content_type", "count": {"$sum": 1}}}
+        ]
+        type_stats = await db.analyses.aggregate(type_pipeline).to_list(100)
+        
+        return {
+            "total_analyses": total_analyses,
+            "total_claims_tracked": total_claims,
+            "prediction_distribution": [{"label": s["_id"], "count": s["count"]} for s in prediction_stats],
+            "content_type_distribution": [{"label": s["_id"], "count": s["count"]} for s in type_stats]
+        }
+    except Exception as exc:
+        logging.warning("Failed to load platform stats: %s", exc, exc_info=True)
+        return {
+            "total_analyses": 0,
+            "total_claims_tracked": 0,
+            "prediction_distribution": [],
+            "content_type_distribution": []
+        }
 
 
 @api_router.post("/analyze-url", response_model=AnalysisResult)
@@ -870,12 +941,13 @@ async def analyze_url(request: UrlAnalysisRequest):
         
         result = await analyze_text(text_request)
         # Update content to show it was from URL
+        result.content_type = "url"
         result.content = f"URL: {request.url}\nTitle: {title_text[:200]}"
         
         # Update in database
-        await db.analyses.update_one(
-            {"id": result.id},
-            {"$set": {"content": result.content}}
+        await safe_update_analysis(
+            result.id,
+            {"content": result.content, "content_type": "url"}
         )
         
         return result
@@ -926,9 +998,9 @@ async def analyze_pdf(file: UploadFile = File(...)):
         # Update content to show PDF info
         result.content = f"PDF: {file.filename}\nPages analyzed: {len(text_chunks)}"
         
-        await db.analyses.update_one(
-            {"id": result.id},
-            {"$set": {"content": result.content, "content_type": "pdf"}}
+        await safe_update_analysis(
+            result.id,
+            {"content": result.content, "content_type": "pdf"}
         )
         result.content_type = "pdf"
         
@@ -945,7 +1017,12 @@ async def analyze_pdf(file: UploadFile = File(...)):
 async def export_pdf(analysis_id: str):
     """Export analysis report as PDF"""
     try:
-        result = await db.analyses.find_one({"id": analysis_id}, {"_id": 0})
+        try:
+            result = await db.analyses.find_one({"id": analysis_id}, {"_id": 0})
+        except Exception as exc:
+            logging.warning("Failed to load analysis %s for PDF export: %s", analysis_id, exc, exc_info=True)
+            raise HTTPException(status_code=503, detail="Database temporarily unavailable")
+
         if not result:
             raise HTTPException(status_code=404, detail="Analysis not found")
         
