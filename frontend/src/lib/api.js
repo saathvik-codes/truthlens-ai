@@ -14,7 +14,7 @@ export function getApiErrorMessage(error, fallback = "Request failed") {
 
   const status = error?.response?.status;
   if (status === 405) {
-    return "API rejected the request. Check that REACT_APP_BACKEND_URL points to the FastAPI backend, not a static site.";
+    return "API rejected the request with HTTP 405. This usually means the frontend is still calling an old or wrong endpoint. Verify the deployed REACT_APP_BACKEND_URL and redeploy the frontend.";
   }
 
   if (status) {
