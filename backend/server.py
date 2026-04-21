@@ -70,7 +70,7 @@ app.state.db_status = "initializing"
 app.state.db_error = None
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def service_root():
     return {
         "service": "TruthLens API",
@@ -84,7 +84,7 @@ async def service_root():
     }
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     return {
         "status": "ok",
