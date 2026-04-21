@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import '@/App.css';
 import Landing from './pages/Landing';
@@ -9,6 +9,10 @@ import { Toaster } from './components/ui/sonner';
 
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    document.title = 'TruthLens';
+  }, []);
 
   return (
     <div className="App">

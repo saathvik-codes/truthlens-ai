@@ -8,9 +8,7 @@ import { toast } from 'sonner';
 import CredibilityScore from '../components/CredibilityScore';
 import ExplainabilityView from '../components/ExplainabilityView';
 import KnowledgeGraph from '../components/KnowledgeGraph';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { API_BASE_URL, getApiErrorMessage } from '../lib/api';
 
 const Analysis = () => {
   const [activeTab, setActiveTab] = useState('text');
@@ -31,7 +29,7 @@ const Analysis = () => {
     setResult(null);
 
     try {
-      const response = await axios.post(`${API}/analyze-text`, {
+      const response = await axios.post(`${API_BASE_URL}/analyze-text`, {
         text: textInput,
         check_sources: true,
         extract_claims: true
@@ -40,7 +38,7 @@ const Analysis = () => {
       setResult(response.data);
       toast.success('Analysis complete!');
     } catch (error) {
-      toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
+      toast.error(`Analysis failed: ${getApiErrorMessage(error, 'Analysis failed')}`);
     } finally {
       setAnalyzing(false);
     }
@@ -63,7 +61,7 @@ const Analysis = () => {
     setResult(null);
 
     try {
-      const response = await axios.post(`${API}/analyze-url`, {
+      const response = await axios.post(`${API_BASE_URL}/analyze-url`, {
         url: urlInput,
         check_sources: true,
         extract_claims: true
@@ -72,7 +70,7 @@ const Analysis = () => {
       setResult(response.data);
       toast.success('URL analysis complete!');
     } catch (error) {
-      toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
+      toast.error(`Analysis failed: ${getApiErrorMessage(error, 'Analysis failed')}`);
     } finally {
       setAnalyzing(false);
     }
@@ -95,7 +93,7 @@ const Analysis = () => {
       if (type === 'video') endpoint = '/analyze-video';
       if (type === 'pdf') endpoint = '/analyze-pdf';
 
-      const response = await axios.post(`${API}${endpoint}`, formData, {
+      const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 180000
       });
@@ -103,7 +101,7 @@ const Analysis = () => {
       setResult(response.data);
       toast.success('Analysis complete!');
     } catch (error) {
-      toast.error('Analysis failed: ' + (error.response?.data?.detail || error.message));
+      toast.error(`Analysis failed: ${getApiErrorMessage(error, 'Analysis failed')}`);
     } finally {
       setAnalyzing(false);
     }
@@ -116,7 +114,7 @@ const Analysis = () => {
     }
 
     try {
-      const response = await axios.get(`${API}/export-pdf/${result.id}`, {
+      const response = await axios.get(`${API_BASE_URL}/export-pdf/${result.id}`, {
         responseType: 'blob'
       });
 
@@ -132,7 +130,7 @@ const Analysis = () => {
 
       toast.success('PDF exported successfully!');
     } catch (error) {
-      toast.error('Export failed: ' + (error.response?.data?.detail || error.message));
+      toast.error(`Export failed: ${getApiErrorMessage(error, 'Export failed')}`);
     }
   };
 
