@@ -65,6 +65,9 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 # FastAPI App
 app = FastAPI(title="Truthlens API")
 api_router = APIRouter(prefix="/api")
+app.state.db_ready = False
+app.state.db_status = "initializing"
+app.state.db_error = None
 
 
 @app.get("/")
@@ -73,13 +76,25 @@ async def service_root():
         "service": "TruthLens API",
         "status": "ok",
         "api_root": "/api/",
-        "health": "/health"
+        "health": "/health",
+        "database": {
+            "name": db_name,
+            "status": app.state.db_status,
+        }
     }
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "database": {
+            "name": db_name,
+            "ready": app.state.db_ready,
+            "status": app.state.db_status,
+            "error": app.state.db_error,
+        }
+    }
 
 # Weighted ensemble configuration
 PROVIDER_WEIGHTS = {
@@ -193,6 +208,42 @@ async def safe_update_analysis(analysis_id: str, updates: Dict[str, Any]) -> boo
 def add_persistence_warning(explanation: str) -> str:
     note = " Note: analysis completed, but saving to history is temporarily unavailable."
     return f"{explanation[:1400]}{note}"
+
+
+async def initialize_database() -> None:
+    """Ensure MongoDB is reachable and required collections/indexes exist."""
+    analyses_collection = "analyses"
+    claims_collection = "claims"
+
+    try:
+        await client.admin.command("ping")
+
+        existing_collections = set(await db.list_collection_names())
+        if analyses_collection not in existing_collections:
+            await db.create_collection(analyses_collection)
+        if claims_collection not in existing_collections:
+            await db.create_collection(claims_collection)
+
+        await db.analyses.create_index("id", unique=True, name="analysis_id_unique")
+        await db.analyses.create_index("timestamp", name="analysis_timestamp_idx")
+        await db.analyses.create_index("content_type", name="analysis_content_type_idx")
+        await db.claims.create_index("id", unique=True, name="claim_id_unique")
+        await db.claims.create_index("analysis_id", name="claim_analysis_id_idx")
+        await db.claims.create_index("timestamp", name="claim_timestamp_idx")
+
+        app.state.db_ready = True
+        app.state.db_status = "connected"
+        app.state.db_error = None
+        logger.info(
+            "MongoDB initialized successfully for database '%s' with collections: %s",
+            db_name,
+            ", ".join(sorted(await db.list_collection_names()))
+        )
+    except Exception as exc:
+        app.state.db_ready = False
+        app.state.db_status = "degraded"
+        app.state.db_error = str(exc)
+        logger.warning("MongoDB initialization failed: %s", exc, exc_info=True)
 
 
 # ========== WIKIPEDIA SOURCE VERIFICATION ==========
@@ -1218,6 +1269,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_db_client():
+    await initialize_database()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
