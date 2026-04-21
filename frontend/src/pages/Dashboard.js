@@ -4,9 +4,7 @@ import axios from 'axios';
 import { FileText, Image as ImageIcon, Video, TrendingUp, Activity, AlertTriangle, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { toast } from 'sonner';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { API_BASE_URL, getApiErrorMessage } from '../lib/api';
 
 const Dashboard = () => {
   const [history, setHistory] = useState([]);
@@ -20,14 +18,14 @@ const Dashboard = () => {
   const fetchData = async () => {
     try {
       const [historyRes, statsRes] = await Promise.all([
-        axios.get(`${API}/history`),
-        axios.get(`${API}/stats`)
+        axios.get(`${API_BASE_URL}/history`),
+        axios.get(`${API_BASE_URL}/stats`)
       ]);
       setHistory(historyRes.data);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      toast.error('Failed to load dashboard data');
+      toast.error(getApiErrorMessage(error, 'Failed to load dashboard data'));
     } finally {
       setLoading(false);
     }

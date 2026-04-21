@@ -54,6 +54,21 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 app = FastAPI(title="Truthlens API")
 api_router = APIRouter(prefix="/api")
 
+
+@app.get("/")
+async def service_root():
+    return {
+        "service": "TruthLens API",
+        "status": "ok",
+        "api_root": "/api/",
+        "health": "/health"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 # Weighted ensemble configuration
 PROVIDER_WEIGHTS = {
     'openai': 0.35,
@@ -807,12 +822,14 @@ async def get_stats():
 async def analyze_url(request: UrlAnalysisRequest):
     """Fetch and analyze content from a URL"""
     try:
+        logger.info("Fetching URL for analysis: %s", request.url)
         # Fetch the URL content
         async with aiohttp.ClientSession() as session:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
             async with session.get(request.url, headers=headers, timeout=20) as resp:
+                logger.info("Fetched URL %s with upstream status %s", request.url, resp.status)
                 if resp.status != 200:
                     raise HTTPException(status_code=400, detail=f"Failed to fetch URL: HTTP {resp.status}")
                 html = await resp.text()
