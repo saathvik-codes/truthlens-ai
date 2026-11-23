@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileText, Image as ImageIcon, Video, Link2, FileType, Loader2, AlertCircle, Download } from 'lucide-react';
+import { Upload, FileText, Image as ImageIcon, Video, Link2, FileType, Loader2, Download } from 'lucide-react';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -405,7 +405,7 @@ const Analysis = () => {
           >
             {!result && !analyzing && (
               <div className="flex flex-col items-center justify-center h-full text-center py-16" data-testid="results-placeholder">
-                <AlertCircle className="w-16 h-16 text-gray-300 mb-4" />
+                <img src="/illustrations/tl-empty-analyze.webp" alt="" width={220} height={171} className="mb-4 h-auto w-[220px]" />
                 <h3 className="text-xl font-medium cabinet-grotesk mb-2">No Analysis Yet</h3>
                 <p className="text-sm text-gray-500">Upload content to see detailed analysis results</p>
               </div>

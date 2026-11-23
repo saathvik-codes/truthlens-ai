@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { TypeAnimation } from 'react-type-animation';
-import { Upload, FileText, Image, Video, ArrowRight, Shield, Brain, Network, Sparkles, CheckCircle, Zap } from 'lucide-react';
+import { Upload, FileText, Image, Video, ArrowRight, Shield, Brain, Network, CheckCircle, Zap } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import ThreeScene from '../components/ThreeScene';
 import Logo from '../components/Logo';
@@ -104,10 +104,6 @@ const Landing = () => {
     <div className="min-h-screen bg-white overflow-x-hidden" data-testid="landing-page">
       {/* Hero Section with 3D Background */}
       <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 z-0 opacity-60">
-          <ThreeScene />
-        </div>
-
         <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-white z-[1]" />
 
         <div className="absolute inset-0 z-[1] opacity-[0.03]" style={{
@@ -126,10 +122,7 @@ const Landing = () => {
               <Logo size={80} />
             </motion.div>
 
-            <div className="hero-badge inline-flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full mb-8">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-semibold uppercase tracking-[0.2em]">Powered by Multi-Model AI</span>
-            </div>
+            <p className="hero-badge mb-8 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Text · Images · Video</p>
 
             <h1 className="hero-title text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-6 cabinet-grotesk leading-[1.05]">
               See beyond the<br />
@@ -177,14 +170,11 @@ const Landing = () => {
               </Button>
             </div>
 
-            <motion.div
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="mt-20 inline-flex flex-col items-center gap-2 text-gray-400"
-            >
-              <span className="text-xs uppercase tracking-widest">Scroll</span>
-              <div className="w-px h-12 bg-gradient-to-b from-gray-400 to-transparent" />
-            </motion.div>
+            <img
+              src="/illustrations/tl-hero-lens.webp" alt="" width={560} height={315}
+              className="mx-auto mt-14 h-auto w-full max-w-[560px] mix-blend-multiply"
+              style={{ WebkitMaskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%)', maskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%)' }}
+            />
           </div>
         </div>
       </section>

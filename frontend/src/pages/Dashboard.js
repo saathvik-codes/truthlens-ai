@@ -31,6 +31,9 @@ const Dashboard = () => {
     }
   };
 
+  // The stamp image holds three rings side by side: reliable, suspicious, fake
+  const STAMP_POSITION = { 'status-reliable': '0% 50%', 'status-suspicious': '50% 50%', 'status-fake': '100% 50%' };
+
   const getStatusClass = (prediction) => {
     const p = prediction.toLowerCase();
     if (p.includes('reliable') || p.includes('authentic')) return 'status-reliable';
@@ -264,6 +267,11 @@ const Dashboard = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-1">
                             <span className="text-sm font-medium capitalize">{item.content_type}</span>
+                            <span
+                              aria-hidden="true"
+                              className="inline-block h-9 w-9 shrink-0"
+                              style={{ backgroundImage: 'url(/illustrations/tl-verdict-stamps.webp)', backgroundSize: '300% 100%', backgroundPosition: STAMP_POSITION[getStatusClass(item.prediction)] }}
+                            />
                             <span className={`status-badge ${getStatusClass(item.prediction)}`}>
                               {item.prediction}
                             </span>
