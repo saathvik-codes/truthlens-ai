@@ -6,34 +6,34 @@ TruthLens AI is a research-grade multimodal misinformation detection platform th
 
 ## Key Features
 
-### 🧠 Multimodal Detection Engine
+### Multimodal Detection Engine
 - **Text Analysis**: Detect fake news and misleading claims in articles and social media
 - **Image Forensics**: Identify manipulated photos and AI-generated imagery
 - **Video Analysis**: Frame-by-frame deepfake detection with anomaly highlighting
 
-### 🔍 Explainable AI
+### Explainable AI
 - Highlighted suspicious phrases and segments
 - Detailed reasoning from multiple AI providers
 - Visual heatmaps for manipulation detection
 - Frame-level anomaly detection for videos
 
-### 🌐 AI Ensemble Analysis
+### AI Ensemble Analysis
 - **OpenAI GPT-5.2**: Advanced text and image analysis
 - **Claude Sonnet 4.5**: Sophisticated fact-checking and reasoning
 - **Gemini 3 Flash**: High-speed multimodal verification
 
-### 📊 Credibility Scoring System
+### Credibility Scoring System
 - 0-100 credibility score with color-coded indicators
 - Green (≥70%): Reliable
 - Yellow (40-69%): Suspicious  
 - Red (<40%): Fake/Manipulated
 
-### 🧬 Knowledge Graph Visualization
+### Knowledge Graph Visualization
 - Interactive network showing content relationships
 - Source verification mapping
 - Claim tracking and connections
 
-### 📈 Analysis Dashboard
+### Analysis Dashboard
 - Historical analysis tracking
 - Statistical insights (total analyses, avg credibility, fake detected)
 - Trend visualization
