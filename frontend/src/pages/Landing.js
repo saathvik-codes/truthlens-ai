@@ -172,8 +172,7 @@ const Landing = () => {
 
             <img
               src="/illustrations/tl-hero-lens.webp" alt="" width={560} height={315}
-              className="mx-auto mt-14 h-auto w-full max-w-[560px] mix-blend-multiply"
-              style={{ WebkitMaskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%)', maskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%)' }}
+              className="mx-auto mt-14 h-auto w-full max-w-[560px]"
             />
           </div>
         </div>
