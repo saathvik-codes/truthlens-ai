@@ -96,7 +96,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
             transition={{ delay: 0.2 }}
             className="p-4 border-t border-gray-200"
           >
-            <div className="bg-gradient-to-br from-black to-blue-900 rounded-lg p-4 text-white">
+            <div className="rounded-lg p-4 text-white bg-[#1f3a8a]">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wider">AI Ensemble</span>

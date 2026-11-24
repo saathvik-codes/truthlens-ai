@@ -1,9 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../lib/api';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { TypeAnimation } from 'react-type-animation';
 import { Upload, FileText, Image, Video, ArrowRight, Shield, Brain, Network, CheckCircle, Zap } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import ThreeScene from '../components/ThreeScene';
@@ -12,6 +13,10 @@ import Logo from '../components/Logo';
 const Landing = () => {
   const navigate = useNavigate();
   const heroRef = useRef(null);
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/stats`).then((r) => setLive(r.data)).catch(() => setLive(null));
+  }, []);
 
   useGSAP(() => {
     gsap.from('.hero-badge', {
@@ -57,98 +62,66 @@ const Landing = () => {
   const features = [
     {
       icon: FileText,
-      title: 'Text Intelligence',
-      description: 'Detect fake news and misleading claims in articles, tweets, and social media posts with NLP ensemble analysis.',
+      title: 'Text and links',
+      description: 'Paste an article, a post or a URL. Each claim is pulled out and scored on its own.',
       color: '#002FA7'
     },
     {
       icon: Image,
-      title: 'Image Forensics',
-      description: 'Identify manipulated photos, AI-generated imagery, and deepfake indicators using vision transformers.',
+      title: 'Images',
+      description: 'Looks for signs of editing or generation in a photo and explains what it found.',
       color: '#0A0A0A'
     },
     {
       icon: Video,
-      title: 'Deepfake Detection',
-      description: 'Frame-by-frame video analysis with temporal anomaly detection and synthetic media identification.',
+      title: 'Short videos',
+      description: 'Samples frames from a clip and checks them for signs of manipulation.',
       color: '#002FA7'
     },
     {
       icon: Brain,
-      title: 'Explainable AI',
-      description: 'Get detailed reasoning with SHAP-style highlighting, attention visualization, and confidence metrics.',
+      title: 'Why it decided',
+      description: 'Every result comes with the reasoning, the sentences that mattered and a confidence level.',
       color: '#0A0A0A'
     },
     {
       icon: Network,
-      title: 'Knowledge Graph',
-      description: 'Visualize misinformation spread, source relationships, and entity connections in real-time.',
+      title: 'How claims connect',
+      description: 'A small graph of the people, places and sources a claim mentions.',
       color: '#002FA7'
     },
     {
       icon: Shield,
-      title: 'Source Verification',
-      description: 'Cross-reference claims against Wikipedia, trusted news sources, and fact-check databases.',
+      title: 'Source checks',
+      description: 'Claims are compared with Wikipedia and published reporting, with links you can open.',
       color: '#0A0A0A'
     }
   ];
 
   const stats = [
-    { label: 'AI Models', value: '3+', sublabel: 'Ensemble' },
-    { label: 'Accuracy', value: '95%', sublabel: 'Verified' },
-    { label: 'Content Types', value: '3', sublabel: 'Multimodal' },
-    { label: 'Response', value: '<5s', sublabel: 'Real-time' }
+    { label: 'Checks run', value: live ? live.total_analyses.toLocaleString() : '-' },
+    { label: 'Claims tracked', value: live ? live.total_claims_tracked.toLocaleString() : '-' },
+    { label: 'Content kinds checked', value: live ? String(live.content_type_distribution.length) : '-' },
+    { label: 'Formats supported', value: '5' }
   ];
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden" data-testid="landing-page">
       {/* Hero Section with 3D Background */}
       <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-white z-[1]" />
-
-        <div className="absolute inset-0 z-[1] opacity-[0.03]" style={{
-          backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)',
-          backgroundSize: '60px 60px'
-        }} />
 
         <div className="relative z-10 container mx-auto px-6 py-20">
           <div className="max-w-5xl mx-auto text-center">
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ duration: 1, type: 'spring' }}
-              className="floating-logo inline-block mb-8"
-            >
-              <Logo size={80} />
-            </motion.div>
 
-            <p className="hero-badge mb-8 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Text · Images · Video</p>
+            <p className="hero-badge mb-8 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Text · Links · PDFs · Images · Video</p>
 
             <h1 className="hero-title text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-6 cabinet-grotesk leading-[1.05]">
-              See beyond the<br />
-              <span className="relative inline-block">
-                <TypeAnimation
-                  sequence={[
-                    'deception',
-                    2000,
-                    'manipulation',
-                    2000,
-                    'deepfakes',
-                    2000,
-                    'misinformation',
-                    2000
-                  ]}
-                  wrapper="span"
-                  speed={40}
-                  style={{ color: '#002FA7' }}
-                  repeat={Infinity}
-                />
-              </span>
+              Check a claim<br />before you share it.
             </h1>
 
             <p className="hero-subtitle text-base sm:text-lg text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
-              TruthLens is a multimodal misinformation intelligence platform. Analyze text, images, and videos with
-              ensemble AI to get detailed explanations, source tracing, and credibility scores in seconds.
+              Paste a claim, a link, a PDF, a photo or a short video. TruthLens checks it against several models and
+              public sources, then shows how credible it looks and why.
             </p>
 
             <div className="hero-buttons flex flex-wrap justify-center gap-4">
@@ -183,8 +156,7 @@ const Landing = () => {
         <div className="container mx-auto px-6">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12">
-              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">By The Numbers</span>
-              <h2 className="text-3xl sm:text-4xl font-bold mt-3 cabinet-grotesk">Built for Scale & Precision</h2>
+                            <h2 className="text-3xl sm:text-4xl font-bold mt-3 cabinet-grotesk">So far</h2>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -198,12 +170,10 @@ const Landing = () => {
                   className="bg-white border border-gray-200 p-8 hover:border-black transition-colors relative overflow-hidden group"
                   data-testid={`stat-${stat.label.toLowerCase().replace(' ', '-')}`}
                 >
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-900/5 to-transparent rounded-bl-full" />
-                  <div className="text-5xl font-bold cabinet-grotesk mb-2 bg-gradient-to-r from-black to-blue-900 bg-clip-text text-transparent">
+                  <div className="text-5xl font-bold cabinet-grotesk mb-2 text-gray-900">
                     {stat.value}
                   </div>
                   <div className="text-sm font-medium text-gray-900">{stat.label}</div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">{stat.sublabel}</div>
                 </motion.div>
               ))}
             </div>
@@ -216,13 +186,9 @@ const Landing = () => {
         <div className="container mx-auto px-6">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">Core Capabilities</span>
-              <h2 className="text-3xl sm:text-5xl font-bold mt-3 cabinet-grotesk">
-                Comprehensive<br />
-                <span className="text-blue-900">Detection Engine</span>
-              </h2>
+              <h2 className="text-3xl sm:text-5xl font-bold cabinet-grotesk">What it checks</h2>
               <p className="text-base text-gray-600 mt-6 max-w-2xl mx-auto">
-                Six powerful modules working in concert to deliver research-grade misinformation intelligence.
+                Each check looks at a different part of the evidence.
               </p>
             </div>
 
@@ -234,10 +200,10 @@ const Landing = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1, duration: 0.6 }}
-                  className="group relative bg-white border border-gray-200 p-8 hover:border-black transition-all hover:shadow-xl overflow-hidden"
+                  className="group relative bg-white border border-gray-200 p-8 hover:border-black transition-all overflow-hidden"
                   data-testid={`feature-${feature.title.toLowerCase().replace(' ', '-')}`}
                 >
-                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-black to-blue-900 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
+                  <div className="absolute top-0 left-0 w-full h-0.5 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left bg-[#1f3a8a]" />
 
                   <div
                     className="w-14 h-14 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"
@@ -274,7 +240,7 @@ const Landing = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 { num: '01', title: 'Upload', desc: 'Drop text, image, or video content into the analyzer', icon: Upload },
-                { num: '02', title: 'Analyze', desc: 'AI ensemble processes through multiple detection layers', icon: Zap },
+                { num: '02', title: 'Analyze', desc: 'It is checked by several models and against public sources', icon: Zap },
                 { num: '03', title: 'Decide', desc: 'Get credibility score, explanation, and source verification', icon: CheckCircle }
               ].map((step, i) => (
                 <motion.div
@@ -304,10 +270,10 @@ const Landing = () => {
         </div>
         <div className="relative z-10 container mx-auto px-6 text-center">
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 cabinet-grotesk">
-            Ready to see the truth?
+            Check something now.
           </h2>
           <p className="text-lg text-gray-400 mb-10 max-w-2xl mx-auto">
-            Join researchers, journalists, and fact-checkers using TruthLens to combat misinformation.
+            A headline, a link, a photo or a short clip is enough.
           </p>
           <Button
             onClick={() => navigate('/analyze')}
@@ -315,7 +281,7 @@ const Landing = () => {
             data-testid="start-analyzing-btn"
           >
             <Upload className="mr-2 w-5 h-5" />
-            Start Analyzing Now
+            Start a check
           </Button>
         </div>
       </section>
@@ -329,7 +295,7 @@ const Landing = () => {
               <span className="text-white font-bold cabinet-grotesk text-lg">TruthLens AI</span>
             </div>
             <div className="text-sm text-gray-500">
-              Multimodal Misinformation Intelligence Platform · 2026
+              TruthLens
             </div>
           </div>
         </div>
