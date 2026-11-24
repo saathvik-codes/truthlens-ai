@@ -40,11 +40,17 @@ class LlmChat:
                 "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": {"temperature": 0.2},
             }
-            model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+            # Tried in order; a busy (503), rate-limited (429) or retired (404) model falls through to the next.
+            models = [m.strip() for m in os.environ.get(
+                "GEMINI_MODEL", "gemini-flash-latest,gemini-3.8-flash,gemini-3.5-flash,gemini-flash-lite-latest"
+            ).split(",") if m.strip()]
             async with httpx.AsyncClient(timeout=90) as client:
-                r = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                    headers={"x-goog-api-key": key}, json=body)
+                for model in models:
+                    r = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={"x-goog-api-key": key}, json=body)
+                    if r.status_code not in (404, 429, 500, 503):
+                        break
             r.raise_for_status()
             data = r.json()
             text = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"]).strip()
