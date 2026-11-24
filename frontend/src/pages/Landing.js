@@ -120,8 +120,8 @@ const Landing = () => {
             </h1>
 
             <p className="hero-subtitle text-base sm:text-lg text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Paste a claim, a link, a PDF, a photo or a short video. TruthLens checks it against several models and
-              public sources, then shows how credible it looks and why.
+              Paste a claim, a link, a PDF, a photo or a short video. TruthLens checks it with an AI model and
+              against public sources, then shows how credible it looks and why.
             </p>
 
             <div className="hero-buttons flex flex-wrap justify-center gap-4">
@@ -240,7 +240,7 @@ const Landing = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 { num: '01', title: 'Upload', desc: 'Drop text, image, or video content into the analyzer', icon: Upload },
-                { num: '02', title: 'Analyze', desc: 'It is checked by several models and against public sources', icon: Zap },
+                { num: '02', title: 'Analyze', desc: 'An AI model reads it and compares it with public sources', icon: Zap },
                 { num: '03', title: 'Decide', desc: 'Get credibility score, explanation, and source verification', icon: CheckCircle }
               ].map((step, i) => (
                 <motion.div

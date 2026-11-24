@@ -99,9 +99,9 @@ const Sidebar = ({ collapsed, onToggle }) => {
             <div className="rounded-lg p-4 text-white bg-[#1f3a8a]">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4" />
-                <span className="text-xs font-semibold uppercase tracking-wider">AI Ensemble</span>
+                <span className="text-xs font-semibold uppercase tracking-wider">How it checks</span>
               </div>
-              <p className="text-xs text-gray-300">OpenAI · Claude · Gemini</p>
+              <p className="text-xs text-gray-300">An AI model plus Wikipedia and published sources</p>
               <div className="mt-3 flex gap-1">
                 <div className="h-1 flex-1 bg-white/20 rounded">
                   <div className="h-full bg-white rounded w-full" />
