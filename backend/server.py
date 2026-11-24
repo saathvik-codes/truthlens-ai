@@ -51,13 +51,21 @@ mongo_server_selection_timeout_ms = int(
 )
 mongo_socket_timeout_ms = int(os.environ.get('MONGO_SOCKET_TIMEOUT_MS', '10000'))
 
-client = AsyncIOMotorClient(
-    mongo_url,
-    tlsCAFile=os.environ.get('MONGO_TLS_CA_FILE') or certifi.where(),
-    serverSelectionTimeoutMS=mongo_server_selection_timeout_ms,
-    connectTimeoutMS=mongo_server_selection_timeout_ms,
-    socketTimeoutMS=mongo_socket_timeout_ms,
-)
+USING_MEMORY_DB = False
+try:
+    client = AsyncIOMotorClient(
+        mongo_url,
+        tlsCAFile=os.environ.get('MONGO_TLS_CA_FILE') or certifi.where(),
+        serverSelectionTimeoutMS=mongo_server_selection_timeout_ms,
+        connectTimeoutMS=mongo_server_selection_timeout_ms,
+        socketTimeoutMS=mongo_socket_timeout_ms,
+    )
+except Exception as exc:  # e.g. the Atlas cluster was deleted and its DNS name no longer resolves
+    # Keep the API up: analyses still work, history lives in memory until MONGO_URL points at a real cluster.
+    logging.error("MongoDB unavailable (%s); falling back to an in-memory database", exc)
+    from mongomock_motor import AsyncMongoMockClient
+    client = AsyncMongoMockClient()
+    USING_MEMORY_DB = True
 db = client[db_name]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
